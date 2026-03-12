@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="300" viewBox="0 0 800 300">
+  <defs>
+    <linearGradient id="c3" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#E8F5E9"/>
+      <stop offset="100%" style="stop-color:#C8E6C9"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="300" fill="url(#c3)"/>
+  <text x="400" y="150" font-family="sans-serif" font-size="24" fill="#2E7D32" text-anchor="middle">zı¨P</text>
+</svg>
