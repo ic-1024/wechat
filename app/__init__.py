@@ -19,6 +19,7 @@ def create_app(config=None):
         'DATABASE_URI', f'sqlite:///{db_path}'
     )
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024
 
     uploads_dir = base_dir / 'uploads'
     uploads_dir.mkdir(parents=True, exist_ok=True)
