@@ -8,7 +8,7 @@ import random
 import requests
 from flask import Blueprint, request, jsonify, session, current_app
 from datetime import datetime
-from app.models import db, Admin, Category, Wardrobe, Scene
+from app.models import db, Admin, User, Category, Wardrobe, Scene
 
 api_bp = Blueprint('api', __name__)
 
@@ -110,6 +110,56 @@ def admin_logout():
 def admin_check():
     logged = bool(session.get('admin_id'))
     return jsonify({"code": 0, "message": "ok", "data": {"logged": logged}})
+
+
+@api_bp.route('/user/register', methods=['POST'])
+def user_register():
+    data = request.get_json() or {}
+    username = (data.get('username') or '').strip()
+    password = data.get('password') or ''
+    if not username or not password:
+        return jsonify({"code": -1, "message": "用户名和密码不能为空"})
+    if len(username) < 2 or len(username) > 20:
+        return jsonify({"code": -1, "message": "用户名长度需在2-20个字符之间"})
+    if len(password) < 4:
+        return jsonify({"code": -1, "message": "密码长度不能少于4位"})
+    if User.query.filter_by(username=username).first():
+        return jsonify({"code": -1, "message": "该用户名已被注册"})
+    u = User(username=username, nickname=username)
+    u.set_password(password)
+    db.session.add(u)
+    db.session.commit()
+    return jsonify({"code": 0, "message": "注册成功", "data": u.to_dict()})
+
+
+@api_bp.route('/user/login', methods=['POST'])
+def user_login():
+    data = request.get_json() or {}
+    username = (data.get('username') or '').strip()
+    password = data.get('password') or ''
+    if not username or not password:
+        return jsonify({"code": -1, "message": "用户名和密码不能为空"})
+    u = User.query.filter_by(username=username).first()
+    if not u or not u.check_password(password):
+        return jsonify({"code": -1, "message": "用户名或密码错误"})
+    return jsonify({"code": 0, "message": "登录成功", "data": u.to_dict()})
+
+
+@api_bp.route('/user/profile', methods=['PUT'])
+def user_profile_update():
+    data = request.get_json() or {}
+    user_id = data.get('userId') or data.get('user_id')
+    if not user_id:
+        return jsonify({"code": -1, "message": "缺少用户ID"})
+    u = db.session.get(User, int(user_id))
+    if not u:
+        return jsonify({"code": -1, "message": "用户不存在"})
+    if 'nickname' in data:
+        u.nickname = (data['nickname'] or '').strip() or u.username
+    if 'avatarUrl' in data:
+        u.avatar_url = (data['avatarUrl'] or '').strip()
+    db.session.commit()
+    return jsonify({"code": 0, "message": "ok", "data": u.to_dict()})
 
 
 @api_bp.route('/weather', methods=['GET'])

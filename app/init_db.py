@@ -3,7 +3,7 @@
    由 run.py 在 app_context 中调用，不再自行创建 app
 """
 import json
-from .models import db, Admin, Category, Wardrobe, Scene
+from .models import db, Admin, User, Category, Wardrobe, Scene
 
 DEMO_ITEMS = [
     {
@@ -109,6 +109,13 @@ def run():
         admin = Admin(username='admin')
         admin.set_password('123456')
         db.session.add(admin)
+
+    if User.query.filter_by(username='user').first() is None:
+        u = User(username='user', nickname='测试用户',
+                 avatar_url='https://picsum.photos/seed/default-avatar/200/200')
+        u.set_password('123456')
+        db.session.add(u)
+        print('[init_db] 创建测试用户 user/123456')
 
     if Category.query.count() == 0:
         for i, name in enumerate(['上衣', '裤子', '外套', '鞋子', '配饰']):
