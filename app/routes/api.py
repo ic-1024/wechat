@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """API 路由"""
 import json
+import random
 import requests
 from flask import Blueprint, request, jsonify, session
 from datetime import datetime
@@ -207,18 +208,27 @@ def recommend():
     scene = data.get('scene', '通勤')
     temp = weather_info.get('temp')
 
-    items = Wardrobe.query.filter(
-        Wardrobe.weather.contains(weather_desc),
-        Wardrobe.scene.contains(scene)
-    ).limit(8).all()
+    all_items = Wardrobe.query.all()
+
+    scored = []
+    for w in all_items:
+        score = 0
+        w_scene = _parse_json(w.scene)
+        w_weather = _parse_json(w.weather)
+        if scene in w_scene:
+            score += 10
+        if weather_desc in w_weather:
+            score += 5
+        if score > 0:
+            scored.append((score, random.random(), w))
+
+    scored.sort(key=lambda x: (-x[0], x[1]))
+    items = [s[2] for s in scored[:6]]
 
     if not items:
-        items = Wardrobe.query.filter(
-            Wardrobe.scene.contains(scene)
-        ).limit(8).all()
-
-    if not items:
-        items = Wardrobe.query.limit(8).all()
+        fallback = list(all_items)
+        random.shuffle(fallback)
+        items = fallback[:6]
 
     result = [_wardrobe_to_dict(i) for i in items]
 
@@ -239,7 +249,7 @@ def recommend():
 
     return jsonify({
         "code": 0, "message": "ok",
-        "data": {"items": result}
+        "data": {"items": result, "scene": scene, "weather": weather_desc}
     })
 
 
