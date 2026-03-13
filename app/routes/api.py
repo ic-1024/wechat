@@ -1,11 +1,53 @@
 # -*- coding: utf-8 -*-
 """API 路由"""
 import json
+import requests
 from flask import Blueprint, request, jsonify, session
 from datetime import datetime
 from app.models import db, Admin, Category, Wardrobe
 
 api_bp = Blueprint('api', __name__)
+
+WMO_WEATHER_MAP = {
+    0: ('晴', '☀️'), 1: ('少云', '🌤'), 2: ('多云', '⛅'), 3: ('阴', '☁️'),
+    45: ('雾', '🌫'), 48: ('雾凇', '🌫'),
+    51: ('小毛毛雨', '🌦'), 53: ('毛毛雨', '🌦'), 55: ('密毛毛雨', '🌦'),
+    56: ('冻毛毛雨', '🌧'), 57: ('冻毛毛雨', '🌧'),
+    61: ('小雨', '🌧'), 63: ('中雨', '🌧'), 65: ('大雨', '🌧'),
+    66: ('冻雨', '🌧'), 67: ('冻雨', '🌧'),
+    71: ('小雪', '🌨'), 73: ('中雪', '🌨'), 75: ('大雪', '🌨'),
+    77: ('雪粒', '🌨'),
+    80: ('小阵雨', '🌦'), 81: ('阵雨', '🌦'), 82: ('大阵雨', '🌦'),
+    85: ('小阵雪', '🌨'), 86: ('大阵雪', '🌨'),
+    95: ('雷暴', '⛈'), 96: ('雷暴冰雹', '⛈'), 99: ('雷暴大冰雹', '⛈'),
+}
+
+WIND_DIRS = ['北', '东北', '东', '东南', '南', '西南', '西', '西北']
+
+
+def _wmo_to_desc(code):
+    return WMO_WEATHER_MAP.get(code, ('未知', '❓'))
+
+
+def _wind_direction(deg):
+    if deg is None:
+        return '无'
+    idx = round(deg / 45) % 8
+    return WIND_DIRS[idx] + '风'
+
+
+def _wind_level(speed_kmh):
+    if speed_kmh is None:
+        return ''
+    ms = speed_kmh / 3.6
+    if ms < 0.3: return '0级'
+    if ms < 1.6: return '1级'
+    if ms < 3.4: return '2级'
+    if ms < 5.5: return '3级'
+    if ms < 8.0: return '4级'
+    if ms < 10.8: return '5级'
+    if ms < 13.9: return '6级'
+    return '7级以上'
 
 
 def _parse_json(s):
@@ -72,26 +114,131 @@ def weather():
     lon = request.args.get('lon')
     if not lat or not lon:
         return jsonify({"code": -1, "message": "缺少经纬度参数"})
+
+    try:
+        lat_f, lon_f = float(lat), float(lon)
+    except ValueError:
+        return jsonify({"code": -1, "message": "经纬度参数格式错误"})
+
+    city = "未知城市"
+    try:
+        geo_resp = requests.get(
+            'https://geocoding-api.open-meteo.com/v1/search',
+            params={'latitude': lat_f, 'longitude': lon_f, 'count': 1, 'language': 'zh'},
+            timeout=5
+        )
+        geo_data = geo_resp.json()
+        if geo_data.get('results'):
+            city = geo_data['results'][0].get('name', city)
+    except Exception:
+        try:
+            geo_resp2 = requests.get(
+                f'https://api.bigdatacloud.net/data/reverse-geocode-client?latitude={lat_f}&longitude={lon_f}&localityLanguage=zh',
+                timeout=5
+            )
+            geo2 = geo_resp2.json()
+            city = geo2.get('city') or geo2.get('locality') or city
+        except Exception:
+            pass
+
+    try:
+        resp = requests.get(
+            'https://api.open-meteo.com/v1/forecast',
+            params={
+                'latitude': lat_f,
+                'longitude': lon_f,
+                'current': 'temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m,wind_direction_10m',
+                'daily': 'weather_code,temperature_2m_max,temperature_2m_min',
+                'timezone': 'auto',
+                'forecast_days': 7
+            },
+            timeout=10
+        )
+        api_data = resp.json()
+    except Exception as e:
+        return jsonify({"code": -1, "message": f"天气API请求失败: {str(e)}"})
+
+    current = api_data.get('current', {})
+    wmo_code = current.get('weather_code', 0)
+    desc, icon = _wmo_to_desc(wmo_code)
+    wind_dir = _wind_direction(current.get('wind_direction_10m'))
+    wind_lvl = _wind_level(current.get('wind_speed_10m'))
+
+    daily = api_data.get('daily', {})
+    forecast = []
+    times = daily.get('time', [])
+    maxs = daily.get('temperature_2m_max', [])
+    mins = daily.get('temperature_2m_min', [])
+    codes = daily.get('weather_code', [])
+    for i in range(len(times)):
+        d, di = _wmo_to_desc(codes[i] if i < len(codes) else 0)
+        forecast.append({
+            'date': times[i],
+            'desc': d,
+            'icon': di,
+            'tempMax': maxs[i] if i < len(maxs) else 0,
+            'tempMin': mins[i] if i < len(mins) else 0,
+        })
+
     return jsonify({
         "code": 0, "message": "ok",
-        "data": {"temp": 25, "desc": "晴", "wind": "东风2级", "humidity": 60}
+        "data": {
+            "temp": round(current.get('temperature_2m', 0)),
+            "desc": desc,
+            "icon": icon,
+            "wind": f"{wind_dir}{wind_lvl}",
+            "humidity": current.get('relative_humidity_2m', 0),
+            "city": city,
+            "lat": round(lat_f, 4),
+            "lon": round(lon_f, 4),
+            "forecast": forecast,
+            "updateTime": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            "apiSource": "Open-Meteo (open-meteo.com)"
+        }
     })
 
 
 @api_bp.route('/recommend', methods=['POST'])
 def recommend():
     data = request.get_json() or {}
-    weather_desc = (data.get('weather') or {}).get('desc', '晴')
+    weather_info = data.get('weather') or {}
+    weather_desc = weather_info.get('desc', '晴')
     scene = data.get('scene', '通勤')
+    temp = weather_info.get('temp')
+
     items = Wardrobe.query.filter(
         Wardrobe.weather.contains(weather_desc),
         Wardrobe.scene.contains(scene)
-    ).limit(6).all()
+    ).limit(8).all()
+
     if not items:
-        items = Wardrobe.query.limit(6).all()
+        items = Wardrobe.query.filter(
+            Wardrobe.scene.contains(scene)
+        ).limit(8).all()
+
+    if not items:
+        items = Wardrobe.query.limit(8).all()
+
+    result = [_wardrobe_to_dict(i) for i in items]
+
+    if temp is not None:
+        try:
+            temp_val = float(temp)
+            for item in result:
+                if temp_val < 10:
+                    item['tempAdvice'] = '天冷注意保暖'
+                elif temp_val < 20:
+                    item['tempAdvice'] = '适宜穿着'
+                elif temp_val < 30:
+                    item['tempAdvice'] = '天气舒适'
+                else:
+                    item['tempAdvice'] = '天热注意防晒'
+        except (ValueError, TypeError):
+            pass
+
     return jsonify({
         "code": 0, "message": "ok",
-        "data": {"items": [_wardrobe_to_dict(i) for i in items]}
+        "data": {"items": result}
     })
 
 
@@ -161,3 +308,42 @@ def wardrobe_item(item_id):
     w.update_time = datetime.utcnow()
     db.session.commit()
     return jsonify({"code": 0, "message": "ok"})
+
+
+@api_bp.route('/stats', methods=['GET'])
+def stats():
+    total = Wardrobe.query.count()
+    cats = Category.query.order_by(Category.sort_order).all()
+    cat_stats = []
+    for c in cats:
+        cnt = Wardrobe.query.filter_by(category=c.name).count()
+        cat_stats.append({"name": c.name, "count": cnt})
+
+    recent = Wardrobe.query.order_by(Wardrobe.create_time.desc()).limit(5).all()
+
+    scene_stats = {}
+    all_items = Wardrobe.query.all()
+    for item in all_items:
+        scenes = _parse_json(item.scene)
+        for s in scenes:
+            scene_stats[s] = scene_stats.get(s, 0) + 1
+
+    return jsonify({
+        "code": 0, "message": "ok",
+        "data": {
+            "total": total,
+            "categories": cat_stats,
+            "recent": [_wardrobe_to_dict(i) for i in recent],
+            "sceneStats": [{"name": k, "count": v} for k, v in scene_stats.items()]
+        }
+    })
+
+
+@api_bp.route('/admin/reset-db', methods=['POST'])
+def admin_reset_db():
+    from app.init_db import reset_demo_data
+    try:
+        reset_demo_data()
+        return jsonify({"code": 0, "message": "演示数据已重置"})
+    except Exception as e:
+        return jsonify({"code": -1, "message": f"重置失败: {str(e)}"})
