@@ -8,8 +8,7 @@ db = SQLAlchemy()
 
 
 class Admin(db.Model):
-    """管理员账号"""
-    __tablename__ = 'admin'
+    __tablename__ = 'admins'
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(64), unique=True, nullable=False)
     password_hash = db.Column(db.String(256), nullable=False)
@@ -23,22 +22,20 @@ class Admin(db.Model):
 
 
 class Category(db.Model):
-    """服装分类"""
-    __tablename__ = 'category'
+    __tablename__ = 'categories'
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(64), nullable=False)
-    order = db.Column(db.Integer, default=0)
+    sort_order = db.Column(db.Integer, default=0)
 
 
 class Wardrobe(db.Model):
-    """服装"""
     __tablename__ = 'wardrobe'
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(128), nullable=False)
     category = db.Column(db.String(64), nullable=False)
-    tags = db.Column(db.Text)  # JSON array string
+    tags = db.Column(db.Text)
     image = db.Column(db.String(512))
-    scene = db.Column(db.Text)  # JSON array: 通勤,休息等
-    weather = db.Column(db.Text)  # JSON array: 晴,雨等
+    scene = db.Column(db.Text)
+    weather = db.Column(db.Text)
     create_time = db.Column(db.DateTime, default=datetime.utcnow)
     update_time = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
