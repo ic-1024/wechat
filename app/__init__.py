@@ -2,7 +2,7 @@
 """Flask 应用工厂"""
 import os
 from pathlib import Path
-from flask import Flask
+from flask import Flask, send_from_directory
 from .models import db
 
 
@@ -12,7 +12,6 @@ def create_app(config=None):
     app.config['JSON_AS_ASCII'] = False
     app.config['JSONIFY_MIMETYPE'] = 'application/json; charset=utf-8'
 
-    # 数据库：使用相对路径，便于多机部署
     base_dir = Path(__file__).resolve().parent.parent
     db_path = base_dir / 'data' / 'app.db'
     db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -20,6 +19,10 @@ def create_app(config=None):
         'DATABASE_URI', f'sqlite:///{db_path}'
     )
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+    uploads_dir = base_dir / 'uploads'
+    uploads_dir.mkdir(parents=True, exist_ok=True)
+    app.config['UPLOAD_FOLDER'] = str(uploads_dir)
 
     if config:
         app.config.update(config)
@@ -31,6 +34,10 @@ def create_app(config=None):
         if resp.content_type and 'application/json' in resp.content_type:
             resp.headers['Content-Type'] = 'application/json; charset=utf-8'
         return resp
+
+    @app.route('/uploads/<path:filename>')
+    def uploaded_file(filename):
+        return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
     from .routes import api_bp, admin_bp
     app.register_blueprint(api_bp, url_prefix='/api')

@@ -3,7 +3,7 @@
    由 run.py 在 app_context 中调用，不再自行创建 app
 """
 import json
-from .models import db, Admin, Category, Wardrobe
+from .models import db, Admin, Category, Wardrobe, Scene
 
 DEMO_ITEMS = [
     {
@@ -113,6 +113,12 @@ def run():
     if Category.query.count() == 0:
         for i, name in enumerate(['上衣', '裤子', '外套', '鞋子', '配饰']):
             db.session.add(Category(name=name, sort_order=i))
+
+    DEFAULT_SCENES = ['通勤', '休息', '运动', '约会']
+    if Scene.query.count() == 0:
+        for i, name in enumerate(DEFAULT_SCENES):
+            db.session.add(Scene(name=name, sort_order=i))
+        print('[init_db] 初始化默认场景数据')
 
     if Wardrobe.query.count() == 0:
         for item in DEMO_ITEMS:

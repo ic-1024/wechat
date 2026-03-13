@@ -1,11 +1,14 @@
 # -*- coding: utf-8 -*-
 """API 路由"""
+import os
 import json
+import uuid
+import base64
 import random
 import requests
-from flask import Blueprint, request, jsonify, session
+from flask import Blueprint, request, jsonify, session, current_app
 from datetime import datetime
-from app.models import db, Admin, Category, Wardrobe
+from app.models import db, Admin, Category, Wardrobe, Scene
 
 api_bp = Blueprint('api', __name__)
 
@@ -348,6 +351,69 @@ def stats():
             "sceneStats": [{"name": k, "count": v} for k, v in scene_stats.items()]
         }
     })
+
+
+@api_bp.route('/upload', methods=['POST'])
+def upload_image():
+    data = request.get_json() or {}
+    b64 = data.get('base64', '')
+    ext = data.get('ext', 'jpg')
+    if not b64:
+        return jsonify({"code": -1, "message": "缺少 base64 数据"})
+    if ',' in b64:
+        b64 = b64.split(',', 1)[1]
+    try:
+        img_bytes = base64.b64decode(b64)
+    except Exception:
+        return jsonify({"code": -1, "message": "base64 解码失败"})
+    filename = f"{uuid.uuid4().hex}.{ext}"
+    upload_dir = current_app.config['UPLOAD_FOLDER']
+    filepath = os.path.join(upload_dir, filename)
+    with open(filepath, 'wb') as f:
+        f.write(img_bytes)
+    url = f"/uploads/{filename}"
+    return jsonify({"code": 0, "message": "ok", "data": {"url": url}})
+
+
+@api_bp.route('/categories', methods=['POST'])
+def add_category():
+    data = request.get_json() or {}
+    name = (data.get('name') or '').strip()
+    if not name:
+        return jsonify({"code": -1, "message": "分类名称不能为空"})
+    exists = Category.query.filter_by(name=name).first()
+    if exists:
+        return jsonify({"code": -1, "message": "该分类已存在"})
+    max_order = db.session.query(db.func.max(Category.sort_order)).scalar() or 0
+    cat = Category(name=name, sort_order=max_order + 1)
+    db.session.add(cat)
+    db.session.commit()
+    return jsonify({"code": 0, "message": "ok", "data": {"id": cat.id, "name": cat.name}})
+
+
+@api_bp.route('/scenes', methods=['GET'])
+def scene_list():
+    scenes = Scene.query.order_by(Scene.sort_order).all()
+    return jsonify({
+        "code": 0, "message": "ok",
+        "data": [{"id": s.id, "name": s.name} for s in scenes]
+    })
+
+
+@api_bp.route('/scenes', methods=['POST'])
+def add_scene():
+    data = request.get_json() or {}
+    name = (data.get('name') or '').strip()
+    if not name:
+        return jsonify({"code": -1, "message": "场景名称不能为空"})
+    exists = Scene.query.filter_by(name=name).first()
+    if exists:
+        return jsonify({"code": -1, "message": "该场景已存在"})
+    max_order = db.session.query(db.func.max(Scene.sort_order)).scalar() or 0
+    s = Scene(name=name, sort_order=max_order + 1)
+    db.session.add(s)
+    db.session.commit()
+    return jsonify({"code": 0, "message": "ok", "data": {"id": s.id, "name": s.name}})
 
 
 @api_bp.route('/admin/reset-db', methods=['POST'])
