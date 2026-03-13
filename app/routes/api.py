@@ -123,13 +123,14 @@ def weather():
     city = "未知城市"
     try:
         geo_resp = requests.get(
-            'https://geocoding-api.open-meteo.com/v1/search',
-            params={'latitude': lat_f, 'longitude': lon_f, 'count': 1, 'language': 'zh'},
+            'https://nominatim.openstreetmap.org/reverse',
+            params={'lat': lat_f, 'lon': lon_f, 'format': 'json', 'accept-language': 'zh', 'zoom': 10},
+            headers={'User-Agent': 'WeatherClothingApp/1.0'},
             timeout=5
         )
         geo_data = geo_resp.json()
-        if geo_data.get('results'):
-            city = geo_data['results'][0].get('name', city)
+        addr = geo_data.get('address', {})
+        city = addr.get('city') or addr.get('town') or addr.get('county') or addr.get('state') or city
     except Exception:
         try:
             geo_resp2 = requests.get(
@@ -137,7 +138,7 @@ def weather():
                 timeout=5
             )
             geo2 = geo_resp2.json()
-            city = geo2.get('city') or geo2.get('locality') or city
+            city = geo2.get('city') or geo2.get('locality') or geo2.get('principalSubdivision') or city
         except Exception:
             pass
 
