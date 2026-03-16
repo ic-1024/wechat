@@ -6,6 +6,8 @@ import uuid
 import base64
 import random
 import requests
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 from flask import Blueprint, request, jsonify, session, current_app
 from datetime import datetime
 from app.models import db, Admin, User, Category, Wardrobe, Scene
@@ -166,7 +168,7 @@ def user_wxlogin():
         resp = requests.get('https://api.weixin.qq.com/sns/jscode2session', params={
             'appid': appid, 'secret': secret,
             'js_code': code, 'grant_type': 'authorization_code'
-        }, timeout=10)
+        }, timeout=10, verify=False)
         wx_data = resp.json()
     except Exception as e:
         return jsonify({"code": -1, "message": f"微信接口请求失败: {str(e)}"})
