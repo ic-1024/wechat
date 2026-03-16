@@ -220,7 +220,7 @@ def weather():
             'https://nominatim.openstreetmap.org/reverse',
             params={'lat': lat_f, 'lon': lon_f, 'format': 'json', 'accept-language': 'zh-CN,zh-Hans,zh', 'zoom': 10},
             headers={'User-Agent': 'WeatherClothingApp/1.0'},
-            timeout=5
+            timeout=5, verify=False
         )
         geo_data = geo_resp.json()
         addr = geo_data.get('address', {})
@@ -230,7 +230,7 @@ def weather():
         try:
             geo_resp2 = requests.get(
                 f'https://api.bigdatacloud.net/data/reverse-geocode-client?latitude={lat_f}&longitude={lon_f}&localityLanguage=zh-CN',
-                timeout=5
+                timeout=5, verify=False
             )
             geo2 = geo_resp2.json()
             city = geo2.get('city') or geo2.get('locality') or geo2.get('principalSubdivision') or city
@@ -249,7 +249,7 @@ def weather():
                 'timezone': 'auto',
                 'forecast_days': 7
             },
-            timeout=10
+            timeout=10, verify=False
         )
         api_data = resp.json()
     except Exception as e:
@@ -524,7 +524,7 @@ def city_search():
                 'featuretype': 'city',
             },
             headers={'User-Agent': 'WeatherClothingApp/1.0'},
-            timeout=8
+            timeout=8, verify=False
         )
         results = resp.json()
     except Exception as e:
