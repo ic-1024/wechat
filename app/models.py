@@ -24,8 +24,9 @@ class Admin(db.Model):
 class User(db.Model):
     __tablename__ = 'users'
     id = db.Column(db.Integer, primary_key=True)
+    openid = db.Column(db.String(128), unique=True, nullable=True)
     username = db.Column(db.String(64), unique=True, nullable=False)
-    password_hash = db.Column(db.String(256), nullable=False)
+    password_hash = db.Column(db.String(256), nullable=True, default='')
     nickname = db.Column(db.String(64), default='')
     avatar_url = db.Column(db.String(512), default='')
     create_time = db.Column(db.DateTime, default=datetime.utcnow)
@@ -34,6 +35,8 @@ class User(db.Model):
         self.password_hash = generate_password_hash(password)
 
     def check_password(self, password):
+        if not self.password_hash:
+            return False
         return check_password_hash(self.password_hash, password)
 
     def to_dict(self):

@@ -9,6 +9,13 @@ import requests
 from flask import Blueprint, request, jsonify, session, current_app
 from datetime import datetime
 from app.models import db, Admin, User, Category, Wardrobe, Scene
+try:
+    from zhconv import convert as zhconv_convert
+    def to_simplified(text):
+        return zhconv_convert(text, 'zh-cn') if text else text
+except ImportError:
+    def to_simplified(text):
+        return text
 
 api_bp = Blueprint('api', __name__)
 
@@ -145,6 +152,37 @@ def user_login():
     return jsonify({"code": 0, "message": "登录成功", "data": u.to_dict()})
 
 
+@api_bp.route('/user/wxlogin', methods=['POST'])
+def user_wxlogin():
+    data = request.get_json() or {}
+    code = (data.get('code') or '').strip()
+    if not code:
+        return jsonify({"code": -1, "message": "缺少 code 参数"})
+    appid = os.environ.get('WX_APPID', current_app.config.get('WX_APPID', ''))
+    secret = os.environ.get('WX_SECRET', current_app.config.get('WX_SECRET', ''))
+    if not appid or not secret:
+        return jsonify({"code": -1, "message": "服务端未配置 AppID/Secret"})
+    try:
+        resp = requests.get('https://api.weixin.qq.com/sns/jscode2session', params={
+            'appid': appid, 'secret': secret,
+            'js_code': code, 'grant_type': 'authorization_code'
+        }, timeout=10)
+        wx_data = resp.json()
+    except Exception as e:
+        return jsonify({"code": -1, "message": f"微信接口请求失败: {str(e)}"})
+    openid = wx_data.get('openid')
+    if not openid:
+        errmsg = wx_data.get('errmsg', '未知错误')
+        return jsonify({"code": -1, "message": f"获取 openid 失败: {errmsg}"})
+    u = User.query.filter_by(openid=openid).first()
+    if not u:
+        short_id = openid[-6:]
+        u = User(openid=openid, username=f'wx_{short_id}', nickname=f'微信用户{short_id}')
+        db.session.add(u)
+        db.session.commit()
+    return jsonify({"code": 0, "message": "登录成功", "data": u.to_dict()})
+
+
 @api_bp.route('/user/profile', methods=['PUT'])
 def user_profile_update():
     data = request.get_json() or {}
@@ -178,21 +216,23 @@ def weather():
     try:
         geo_resp = requests.get(
             'https://nominatim.openstreetmap.org/reverse',
-            params={'lat': lat_f, 'lon': lon_f, 'format': 'json', 'accept-language': 'zh', 'zoom': 10},
+            params={'lat': lat_f, 'lon': lon_f, 'format': 'json', 'accept-language': 'zh-CN,zh-Hans,zh', 'zoom': 10},
             headers={'User-Agent': 'WeatherClothingApp/1.0'},
             timeout=5
         )
         geo_data = geo_resp.json()
         addr = geo_data.get('address', {})
         city = addr.get('city') or addr.get('town') or addr.get('county') or addr.get('state') or city
+        city = to_simplified(city)
     except Exception:
         try:
             geo_resp2 = requests.get(
-                f'https://api.bigdatacloud.net/data/reverse-geocode-client?latitude={lat_f}&longitude={lon_f}&localityLanguage=zh',
+                f'https://api.bigdatacloud.net/data/reverse-geocode-client?latitude={lat_f}&longitude={lon_f}&localityLanguage=zh-CN',
                 timeout=5
             )
             geo2 = geo_resp2.json()
             city = geo2.get('city') or geo2.get('locality') or geo2.get('principalSubdivision') or city
+            city = to_simplified(city)
         except Exception:
             pass
 
@@ -464,6 +504,39 @@ def add_scene():
     db.session.add(s)
     db.session.commit()
     return jsonify({"code": 0, "message": "ok", "data": {"id": s.id, "name": s.name}})
+
+
+@api_bp.route('/city/search', methods=['GET'])
+def city_search():
+    q = (request.args.get('q') or '').strip()
+    if not q:
+        return jsonify({"code": -1, "message": "缺少搜索关键词"})
+    try:
+        resp = requests.get(
+            'https://nominatim.openstreetmap.org/search',
+            params={
+                'q': q, 'format': 'json',
+                'accept-language': 'zh-CN,zh-Hans,zh',
+                'limit': 10,
+                'addressdetails': 1,
+                'featuretype': 'city',
+            },
+            headers={'User-Agent': 'WeatherClothingApp/1.0'},
+            timeout=8
+        )
+        results = resp.json()
+    except Exception as e:
+        return jsonify({"code": -1, "message": f"搜索失败: {str(e)}"})
+    cities = []
+    for r in results:
+        display = to_simplified(r.get('display_name', '').split(',')[0])
+        cities.append({
+            'name': display,
+            'displayName': to_simplified(r.get('display_name', '')),
+            'lat': r.get('lat'),
+            'lon': r.get('lon'),
+        })
+    return jsonify({"code": 0, "data": cities})
 
 
 @api_bp.route('/admin/reset-db', methods=['POST'])

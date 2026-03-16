@@ -105,6 +105,15 @@ def run():
     """在已有 app_context 中初始化数据库并填充演示数据"""
     db.create_all()
 
+    from sqlalchemy import inspect, text
+    insp = inspect(db.engine)
+    if 'users' in insp.get_table_names():
+        cols = [c['name'] for c in insp.get_columns('users')]
+        if 'openid' not in cols:
+            db.session.execute(text('ALTER TABLE users ADD COLUMN openid VARCHAR(128)'))
+            db.session.commit()
+            print('[init_db] users 表新增 openid 列')
+
     if Admin.query.filter_by(username='admin').first() is None:
         admin = Admin(username='admin')
         admin.set_password('123456')
