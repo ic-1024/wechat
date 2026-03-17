@@ -20,8 +20,8 @@ def create_app(config=None):
     )
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024
-    app.config['WX_APPID'] = os.environ.get('WX_APPID', 'wx987d07e1139db4f1')
-    app.config['WX_SECRET'] = os.environ.get('WX_SECRET', '375b38ebd6d71bbc1837bf0768e5efa5')
+    app.config['WX_APPID'] = os.environ.get('WX_APPID', '')   # 填入你的小程序 AppID
+    app.config['WX_SECRET'] = os.environ.get('WX_SECRET', '')  # 填入你的小程序 AppSecret
 
     uploads_dir = base_dir / 'uploads'
     uploads_dir.mkdir(parents=True, exist_ok=True)
