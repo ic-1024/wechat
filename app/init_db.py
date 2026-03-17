@@ -150,40 +150,10 @@ def run():
             db.session.add(Scene(name=name, sort_order=i))
         print('[init_db] 初始化默认场景数据')
 
-    if Wardrobe.query.count() == 0:
-        for item in DEMO_ITEMS:
-            db.session.add(Wardrobe(
-                name=item['name'],
-                category=item['category'],
-                tags=json.dumps(item['tags'], ensure_ascii=False),
-                image=item.get('image', ''),
-                scene=json.dumps(item['scene'], ensure_ascii=False),
-                weather=json.dumps(item['weather'], ensure_ascii=False),
-            ))
-        print('[init_db] 插入演示服装数据（含图片）')
-    else:
-        updated = 0
-        for w in Wardrobe.query.all():
-            if w.name in IMAGE_MAP and (not w.image or 'unsplash.com' in (w.image or '')):
-                w.image = IMAGE_MAP[w.name]
-                updated += 1
-        if updated:
-            print(f'[init_db] 为 {updated} 件服装更新了图片URL')
-        existing_names = {w.name for w in Wardrobe.query.all()}
-        added = 0
-        for item in DEMO_ITEMS:
-            if item['name'] not in existing_names:
-                db.session.add(Wardrobe(
-                    name=item['name'],
-                    category=item['category'],
-                    tags=json.dumps(item['tags'], ensure_ascii=False),
-                    image=item.get('image', ''),
-                    scene=json.dumps(item['scene'], ensure_ascii=False),
-                    weather=json.dumps(item['weather'], ensure_ascii=False),
-                ))
-                added += 1
-        if added:
-            print(f'[init_db] 新增 {added} 件演示服装')
+    orphan = Wardrobe.query.filter(Wardrobe.user_id.is_(None)).count()
+    if orphan > 0:
+        Wardrobe.query.filter(Wardrobe.user_id.is_(None)).delete()
+        print(f'[init_db] 清理 {orphan} 条无归属演示数据')
 
     db.session.commit()
     print('[init_db] 数据库初始化完成')

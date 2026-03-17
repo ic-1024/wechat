@@ -318,7 +318,7 @@ def recommend():
 
     wq = Wardrobe.query
     if user_id:
-        wq = wq.filter(db.or_(Wardrobe.user_id == int(user_id), Wardrobe.user_id.is_(None)))
+        wq = wq.filter(Wardrobe.user_id == int(user_id))
     all_items = wq.all()
 
     scored = []
@@ -381,7 +381,7 @@ def wardrobe_list():
         user_id = request.args.get('userId') or request.args.get('user_id')
         q = Wardrobe.query
         if user_id:
-            q = q.filter(db.or_(Wardrobe.user_id == int(user_id), Wardrobe.user_id.is_(None)))
+            q = q.filter(Wardrobe.user_id == int(user_id))
         if keyword:
             q = q.filter(Wardrobe.name.like(f'%{keyword}%'))
         if cat:
@@ -445,7 +445,7 @@ def stats():
     user_id = request.args.get('userId') or request.args.get('user_id')
     wq = Wardrobe.query
     if user_id:
-        wq = wq.filter(db.or_(Wardrobe.user_id == int(user_id), Wardrobe.user_id.is_(None)))
+        wq = wq.filter(Wardrobe.user_id == int(user_id))
 
     total = wq.count()
     cats = Category.query.order_by(Category.sort_order).all()
