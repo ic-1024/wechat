@@ -198,6 +198,12 @@ def user_profile_update():
         u.nickname = (data['nickname'] or '').strip() or u.username
     if 'avatarUrl' in data:
         u.avatar_url = (data['avatarUrl'] or '').strip()
+    if 'newPassword' in data:
+        new_pwd = data['newPassword'] or ''
+        if new_pwd:
+            if len(new_pwd) < 4:
+                return jsonify({"code": -1, "message": "密码长度不能少于4位"})
+            u.set_password(new_pwd)
     db.session.commit()
     return jsonify({"code": 0, "message": "ok", "data": u.to_dict()})
 
