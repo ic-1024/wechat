@@ -75,6 +75,7 @@ def _parse_json(s):
 def _wardrobe_to_dict(w):
     return {
         "id": w.id,
+        "userId": w.user_id,
         "name": w.name,
         "category": w.category,
         "tags": _parse_json(w.tags),
@@ -580,6 +581,20 @@ def city_search():
             'lon': r.get('lon'),
         })
     return jsonify({"code": 0, "data": cities})
+
+
+@api_bp.route('/admin/users', methods=['GET'])
+def admin_users():
+    users = User.query.order_by(User.id).all()
+    return jsonify({
+        "code": 0, "data": [{
+            "id": u.id,
+            "username": u.username,
+            "nickname": u.nickname or '',
+            "openid": u.openid or '',
+            "createTime": u.create_time.isoformat() if u.create_time else ''
+        } for u in users]
+    })
 
 
 @api_bp.route('/admin/reset-db', methods=['POST'])

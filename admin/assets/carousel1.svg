@@ -6,5 +6,6 @@
     </linearGradient>
   </defs>
   <rect width="800" height="300" fill="url(#c1)"/>
-  <text x="400" y="150" font-family="sans-serif" font-size="24" fill="#1976D2" text-anchor="middle">Å¨Pûß</text>
+  <text x="400" y="140" font-family="sans-serif" font-size="28" fill="#1565C0" text-anchor="middle" font-weight="600">&#x667A;&#x80FD;&#x7A7F;&#x642D;&#x63A8;&#x8350;</text>
+  <text x="400" y="180" font-family="sans-serif" font-size="16" fill="#1976D2" text-anchor="middle">&#x57FA;&#x4E8E;&#x5929;&#x6C14;&#x4E0E;&#x573A;&#x666F;&#x7684;&#x670D;&#x88C5;&#x63A8;&#x8350;&#x7CFB;&#x7EDF;</text>
 </svg>
