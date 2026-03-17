@@ -203,6 +203,12 @@ def user_profile_update():
         if new_pwd:
             if len(new_pwd) < 4:
                 return jsonify({"code": -1, "message": "密码长度不能少于4位"})
+            if u.password_hash:
+                old_pwd = data.get('oldPassword') or ''
+                if not old_pwd:
+                    return jsonify({"code": -1, "message": "请输入旧密码"})
+                if not u.check_password(old_pwd):
+                    return jsonify({"code": -1, "message": "旧密码错误"})
             u.set_password(new_pwd)
     db.session.commit()
     return jsonify({"code": 0, "message": "ok", "data": u.to_dict()})
@@ -308,8 +314,12 @@ def recommend():
     weather_desc = weather_info.get('desc', '晴')
     scene = data.get('scene', '通勤')
     temp = weather_info.get('temp')
+    user_id = data.get('userId') or data.get('user_id')
 
-    all_items = Wardrobe.query.all()
+    wq = Wardrobe.query
+    if user_id:
+        wq = wq.filter(db.or_(Wardrobe.user_id == int(user_id), Wardrobe.user_id.is_(None)))
+    all_items = wq.all()
 
     scored = []
     for w in all_items:
@@ -368,7 +378,10 @@ def wardrobe_list():
     if request.method == 'GET':
         keyword = request.args.get('keyword', '')
         cat = request.args.get('category', '')
+        user_id = request.args.get('userId') or request.args.get('user_id')
         q = Wardrobe.query
+        if user_id:
+            q = q.filter(db.or_(Wardrobe.user_id == int(user_id), Wardrobe.user_id.is_(None)))
         if keyword:
             q = q.filter(Wardrobe.name.like(f'%{keyword}%'))
         if cat:
@@ -379,11 +392,13 @@ def wardrobe_list():
     data = request.get_json() or {}
     name = data.get('name', '').strip()
     cat = data.get('category', '').strip()
+    user_id = data.get('userId') or data.get('user_id')
     if not name:
         return jsonify({"code": -1, "message": "服装名称不能为空"})
     now = datetime.utcnow()
     w = Wardrobe(
         name=name, category=cat,
+        user_id=int(user_id) if user_id else None,
         tags=json.dumps(data.get('tags') or [], ensure_ascii=False),
         image=(data.get('image') or '').strip(),
         scene=json.dumps(data.get('scene') or [], ensure_ascii=False),
@@ -400,11 +415,14 @@ def wardrobe_item(item_id):
     w = db.session.get(Wardrobe, item_id)
     if not w:
         return jsonify({"code": -1, "message": "服装不存在"})
+    data = request.get_json() or {}
+    user_id = data.get('userId') or data.get('user_id') or request.args.get('userId')
+    if w.user_id is not None and user_id and w.user_id != int(user_id):
+        return jsonify({"code": -1, "message": "无权操作此服装"})
     if request.method == 'DELETE':
         db.session.delete(w)
         db.session.commit()
         return jsonify({"code": 0, "message": "ok"})
-    data = request.get_json() or {}
     if 'name' in data and data['name']:
         w.name = data['name'].strip()
     if 'category' in data:
@@ -424,21 +442,33 @@ def wardrobe_item(item_id):
 
 @api_bp.route('/stats', methods=['GET'])
 def stats():
-    total = Wardrobe.query.count()
+    user_id = request.args.get('userId') or request.args.get('user_id')
+    wq = Wardrobe.query
+    if user_id:
+        wq = wq.filter(db.or_(Wardrobe.user_id == int(user_id), Wardrobe.user_id.is_(None)))
+
+    total = wq.count()
     cats = Category.query.order_by(Category.sort_order).all()
     cat_stats = []
     for c in cats:
-        cnt = Wardrobe.query.filter_by(category=c.name).count()
+        cnt = wq.filter(Wardrobe.category == c.name).count()
         cat_stats.append({"name": c.name, "count": cnt})
 
-    recent = Wardrobe.query.order_by(Wardrobe.create_time.desc()).limit(5).all()
+    recent = wq.order_by(Wardrobe.create_time.desc()).limit(5).all()
 
-    scene_stats = {}
-    all_items = Wardrobe.query.all()
+    sq = Scene.query
+    if user_id:
+        sq = sq.filter(db.or_(Scene.user_id == int(user_id), Scene.user_id.is_(None)))
+    all_scenes = sq.order_by(Scene.sort_order).all()
+
+    all_items = wq.all()
+    scene_count = {}
     for item in all_items:
         scenes = _parse_json(item.scene)
         for s in scenes:
-            scene_stats[s] = scene_stats.get(s, 0) + 1
+            scene_count[s] = scene_count.get(s, 0) + 1
+
+    scene_stats_list = [{"name": s.name, "count": scene_count.get(s.name, 0)} for s in all_scenes]
 
     return jsonify({
         "code": 0, "message": "ok",
@@ -446,7 +476,7 @@ def stats():
             "total": total,
             "categories": cat_stats,
             "recent": [_wardrobe_to_dict(i) for i in recent],
-            "sceneStats": [{"name": k, "count": v} for k, v in scene_stats.items()]
+            "sceneStats": scene_stats_list
         }
     })
 
@@ -491,7 +521,11 @@ def add_category():
 
 @api_bp.route('/scenes', methods=['GET'])
 def scene_list():
-    scenes = Scene.query.order_by(Scene.sort_order).all()
+    user_id = request.args.get('userId') or request.args.get('user_id')
+    q = Scene.query
+    if user_id:
+        q = q.filter(db.or_(Scene.user_id == int(user_id), Scene.user_id.is_(None)))
+    scenes = q.order_by(Scene.sort_order).all()
     return jsonify({
         "code": 0, "message": "ok",
         "data": [{"id": s.id, "name": s.name} for s in scenes]
@@ -502,13 +536,14 @@ def scene_list():
 def add_scene():
     data = request.get_json() or {}
     name = (data.get('name') or '').strip()
+    user_id = data.get('userId') or data.get('user_id')
     if not name:
         return jsonify({"code": -1, "message": "场景名称不能为空"})
     exists = Scene.query.filter_by(name=name).first()
     if exists:
         return jsonify({"code": -1, "message": "该场景已存在"})
     max_order = db.session.query(db.func.max(Scene.sort_order)).scalar() or 0
-    s = Scene(name=name, sort_order=max_order + 1)
+    s = Scene(name=name, sort_order=max_order + 1, user_id=int(user_id) if user_id else None)
     db.session.add(s)
     db.session.commit()
     return jsonify({"code": 0, "message": "ok", "data": {"id": s.id, "name": s.name}})

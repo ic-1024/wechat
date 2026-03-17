@@ -60,11 +60,13 @@ class Scene(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(64), unique=True, nullable=False)
     sort_order = db.Column(db.Integer, default=0)
+    user_id = db.Column(db.Integer, nullable=True)
 
 
 class Wardrobe(db.Model):
     __tablename__ = 'wardrobe'
     id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, nullable=True)
     name = db.Column(db.String(128), nullable=False)
     category = db.Column(db.String(64), nullable=False)
     tags = db.Column(db.Text)

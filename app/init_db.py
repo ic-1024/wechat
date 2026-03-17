@@ -114,6 +114,20 @@ def run():
             db.session.commit()
             print('[init_db] users 表新增 openid 列')
 
+    if 'wardrobe' in insp.get_table_names():
+        cols = [c['name'] for c in insp.get_columns('wardrobe')]
+        if 'user_id' not in cols:
+            db.session.execute(text('ALTER TABLE wardrobe ADD COLUMN user_id INTEGER'))
+            db.session.commit()
+            print('[init_db] wardrobe 表新增 user_id 列')
+
+    if 'scenes' in insp.get_table_names():
+        cols = [c['name'] for c in insp.get_columns('scenes')]
+        if 'user_id' not in cols:
+            db.session.execute(text('ALTER TABLE scenes ADD COLUMN user_id INTEGER'))
+            db.session.commit()
+            print('[init_db] scenes 表新增 user_id 列')
+
     if Admin.query.filter_by(username='admin').first() is None:
         admin = Admin(username='admin')
         admin.set_password('123456')
